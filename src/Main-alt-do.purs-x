@@ -1,0 +1,146 @@
+module Main where
+
+import Prelude
+
+import Data.Array ((:))
+import Data.Foldable (for_, oneOf, traverse_)
+import Data.Maybe (Maybe(..), isJust)
+import Data.Tuple.Nested ((/\))
+import Debug (spy, trace)
+import Deku.Attribute (cb, (:=))
+import Deku.Control (blank, text_, (<#~>))
+import Deku.Core (Domable, dyn)
+import Deku.DOM as D
+import Deku.Do as Deku
+import Deku.Hooks (useDyn_, useHot, useHot', useState, useState')
+import Deku.Lifecycle (onWillMount)
+import Deku.Listeners (click, click_)
+import Deku.Toplevel (runInBody)
+import Effect (Effect)
+import Effect.Aff (Milliseconds(..), delay, launchAff_)
+import Effect.Class (liftEffect)
+import Effect.Console (log)
+import FRP.Event (Event, burning, create, keepLatest, subscribe)
+import QualifiedDo.Alt as Alt
+import Web.HTML (window)
+import Web.HTML.Window (confirm)
+
+type Rec = { code :: Int, desc :: String }
+type Recs = Array Rec
+
+main :: Effect Unit
+main = do
+  { push, event } <- create
+  let
+    init =
+      [ { code: 1, desc: "Desc for 1" }
+      , { code: 2, desc: "Desc for 2" }
+      , { code: -1, desc: "Desc for -1" }
+      ]
+  { event: recs } <- burning init event
+  runInBody (testFunc recs push)
+
+data ItemLifecycle = Old Rec | New Rec
+
+testFunc :: forall lock payload. Event Recs -> (Recs -> Effect Unit) -> Domable lock payload
+testFunc recs pushRecs = Deku.do
+  setUpdating /\ updating <- useHot'
+  setItem /\ item <- useState'
+
+  onWillMount
+    ( launchAff_ do
+        delay $ Milliseconds 0.0
+        liftEffect do
+          uns <- subscribe recs $ traverse_ $ Old >>> setItem
+          uns
+    ) $ Deku.do
+
+    D.table_
+      [ D.thead_
+          [ D.tr_
+              [ D.th_
+                  [ D.button
+                      ( oneOf
+                          [ disabled $ updating <#> isJust
+                          , click_ $ cb \_ -> do
+                              setItem $ New { code: 0, desc: "" }
+                              setUpdating $ Just 0
+                          ]
+                      )
+                      [ text_ "Add" ]
+                  ]
+              , D.th__ "Code"
+              , D.th__ "Description"
+              ]
+          ]
+      , D.tbody_
+          [ Deku.do
+              let
+                renderItem it' remove mbUpdCode = Deku.do
+                  let
+                    it = case it' of
+                      Old i -> i
+                      New i -> i
+                    new = case it' of
+                      New _ -> true
+                      _ -> false
+                    thisUpdating = (Just it.code == mbUpdCode)
+                    otherUpdating = isJust mbUpdCode && not thisUpdating
+
+                  setTemp /\ temp <- useHot it
+
+                  let
+                    unchanged = temp <#> (_ == it)
+
+                  D.tr_
+                    [ D.td_
+                        if thisUpdating then
+                          [ D.button
+                              ( oneOf
+                                  [ disabled unchanged
+                                  , click $ ((:) <$> temp <*> recs) <#> pushRecs >>> const >>> cb
+                                  ]
+                              )
+                              [ text_ "Update" ]
+                          , D.button
+                              ( click_ $ cb \_ -> do
+                                  if new then remove else pure unit
+                                  setUpdating Nothing
+                              )
+                              [ text_ "Cancel" ]
+                          ]
+                        else if it.code /= -1 then
+                          [ D.button
+                              ( oneOf
+                                  [ disabled_ otherUpdating
+                                  , click_ $ cb \_ -> setUpdating $ Just it.code
+                                  ]
+                              )
+                              [ text_ "Edit" ]
+                          , D.button
+                              ( oneOf
+                                  [ disabled_ otherUpdating
+                                  , click_ $ cb \_ -> window
+                                      >>= confirm ("Do you want to remove item with code \"" <> show it.code <> "\"")
+                                      >>= if _ then remove else pure unit
+                                  ]
+                              )
+                              [ text_ "Remove" ]
+                          ]
+                        else [ blank ]
+                    , D.td__ $ show it.code
+                    , D.td__ it.desc
+                    ]
+
+              dyn $ item <#> \it' -> Alt.do
+                trace "a" \_ -> keepLatest $ updating <#> \mbuc -> Deku.do
+                  { remove } <- useDyn_
+                  renderItem it' remove mbuc
+                trace "b" \_ -> Deku.do
+                  { remove } <- useDyn_
+                  renderItem it' remove Nothing
+          ]
+      ]
+
+disabled = (_ <#> if _ then D.Disabled := "true" else D.Disabled := unit)
+disabled_ = disabled <<< pure

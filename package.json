@@ -1,0 +1,37 @@
+{
+  "name": "try-idea",
+  "version": "0.0.1",
+  "description": "Try a new idea or simplify problematic code",
+  "main": "index.js",
+  "scripts": {
+    "postinstall": "spago build",
+    "start": "webpack serve --mode=development --port=2334 --open",
+    "build": "spago build && webpack",
+    "clean": "rm -rf node_modules && rm -rf .spago && rm -rf output",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MuratOzsoyler/try-idea.git"
+  },
+  "author": "Murat Özsöyler",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/MuratOzsoyler/try-idea/issues"
+  },
+  "homepage": "https://github.com/MuratOzsoyler/try-idea#readme",
+  "devDependencies": {
+    "@babel/core": "^7.20.12",
+    "@babel/preset-env": "^7.20.2",
+    "babel-loader": "^9.1.2",
+    "css-loader": "^6.7.3",
+    "purescript": "^0.15.7",
+    "purescript-psa": "^0.8.2",
+    "purs-tidy": "^0.9.2",
+    "spago": "^0.20.9",
+    "style-loader": "^3.3.1",
+    "webpack": "^5.75.0",
+    "webpack-cli": "^5.0.1",
+    "webpack-dev-server": "^4.11.1"
+  }
+}
